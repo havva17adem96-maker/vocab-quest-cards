@@ -38,7 +38,10 @@ const Index = () => {
     if (currentIndex >= sessionWords.length) return;
 
     const currentWord = sessionWords[currentIndex];
-    const newStars: typeof currentWord.stars = direction === "right" ? 5 : 1;
+    const newStars: typeof currentWord.stars = 
+      direction === "right" 
+        ? (Math.min(currentWord.stars + 1, 5) as typeof currentWord.stars)
+        : 1;
 
     // Update progress
     updateWordStars(currentWord.id, newStars);
@@ -52,7 +55,7 @@ const Index = () => {
     // Show feedback
     toast[direction === "right" ? "success" : "info"](
       direction === "right"
-        ? `"${currentWord.english}" → 5 Yıldız! 🌟`
+        ? `"${currentWord.english}" → ${newStars} Yıldız! 🌟`
         : `"${currentWord.english}" → 1 Yıldız, tekrar çalışalım 📚`,
       { duration: 2000 }
     );
