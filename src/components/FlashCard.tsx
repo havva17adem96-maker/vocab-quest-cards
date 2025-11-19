@@ -7,9 +7,10 @@ interface FlashCardProps {
   word: Word;
   style?: React.CSSProperties;
   onSwipe?: (direction: "left" | "right") => void;
+  onFlip?: () => void;
 }
 
-export function FlashCard({ word, style, onSwipe }: FlashCardProps) {
+export function FlashCard({ word, style, onSwipe, onFlip }: FlashCardProps) {
   const [isFlipped, setIsFlipped] = useState(false);
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(
     null
@@ -106,6 +107,9 @@ export function FlashCard({ word, style, onSwipe }: FlashCardProps) {
         onClick={(e) => {
           if (!isDragging && Math.abs(dragOffset.x) < 10) {
             e.stopPropagation();
+            if (!isFlipped) {
+              onFlip?.();
+            }
             setIsFlipped(!isFlipped);
           }
         }}
