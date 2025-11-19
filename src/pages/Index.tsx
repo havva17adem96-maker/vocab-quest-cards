@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import React from "react";
 import { Word } from "@/types/word";
 import { FlashCard } from "@/components/FlashCard";
 import { AllWordsModal } from "@/components/AllWordsModal";
@@ -9,9 +10,10 @@ import {
   createLearningSession,
 } from "@/utils/wordParser";
 import { Button } from "@/components/ui/button";
-import { List, RotateCcw, Undo } from "lucide-react";
+import { List, RotateCcw, Undo, Volume2 } from "lucide-react";
 import { toast } from "sonner";
 import wordsCSV from "@/data/words.csv?raw";
+import { Progress } from "@/components/ui/progress";
 
 const SESSION_STORAGE_KEY = "flashcard-session";
 
@@ -28,6 +30,7 @@ const Index = () => {
   const [showAllWords, setShowAllWords] = useState(false);
   const [sessionComplete, setSessionComplete] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [currentWordAudio, setCurrentWordAudio] = useState<string>("");
 
   useEffect(() => {
     const parsed = parseCSV(wordsCSV);
@@ -71,6 +74,16 @@ const Index = () => {
     localStorage.removeItem(SESSION_STORAGE_KEY);
   };
 
+  const speakWord = (word: string) => {
+    if ('speechSynthesis' in window) {
+      const utterance = new SpeechSynthesisUtterance(word);
+      utterance.lang = 'en-US';
+      utterance.rate = 0.8;
+      speechSynthesis.cancel(); // Cancel any ongoing speech
+      speechSynthesis.speak(utterance);
+    }
+  };
+
   const handleFlip = () => {
     if (currentIndex >= sessionWords.length) return;
     
@@ -112,10 +125,13 @@ const Index = () => {
       index: currentIndex,
     }]);
     
+    // If card was flipped (set to 1 star), keep it at 1 star regardless of swipe direction
     const newStars: typeof currentWord.stars = 
-      direction === "right" 
-        ? (Math.min(currentWord.stars + 1, 5) as typeof currentWord.stars)
-        : 1;
+      currentWord.stars === 1 
+        ? 1
+        : (direction === "right" 
+          ? (Math.min(currentWord.stars + 1, 5) as typeof currentWord.stars)
+          : 1);
 
     // Update progress
     updateWordStars(currentWord.id, newStars);
@@ -179,10 +195,52 @@ const Index = () => {
     startNewSession(allWords);
   };
 
+  // Calculate progress percentage
+  const calculateProgress = () => {
+    if (allWords.length === 0) return 0;
+    
+    // Calculate next session size based on current star levels
+    let nextSessionSize = 0;
+    allWords.forEach((word) => {
+      const repeatCount = word.stars === 0 ? 1 : 6 - word.stars;
+      nextSessionSize += repeatCount;
+    });
+    
+    const minSize = allWords.length; // All 5 stars
+    const maxSize = allWords.length * 5; // All 1 star
+    
+    // Progress: closer to minSize = higher progress
+    const progress = ((maxSize - nextSessionSize) / (maxSize - minSize)) * 100;
+    return Math.max(0, Math.min(100, progress));
+  };
+
+  const progressPercentage = calculateProgress();
+
   const visibleCards = sessionWords.slice(currentIndex, currentIndex + 3);
+
+  // Speak the word when a new card is shown
+  React.useEffect(() => {
+    if (visibleCards.length > 0 && !sessionComplete) {
+      const word = visibleCards[0].english;
+      setCurrentWordAudio(word);
+      speakWord(word);
+    }
+  }, [currentIndex, sessionComplete]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-secondary flex flex-col">
+      {/* Progress Bar */}
+      <div className="p-4 pb-0">
+        <div className="max-w-2xl mx-auto">
+          <div className="flex items-center gap-3">
+            <Progress value={progressPercentage} className="flex-1" />
+            <span className="text-sm font-medium text-muted-foreground min-w-[3rem] text-right">
+              {Math.round(progressPercentage)}%
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* Header */}
       <header className="p-4 flex items-center justify-between">
         <div>
@@ -267,6 +325,14 @@ const Index = () => {
             <div className="text-2xl">→</div>
             <span>Biliyorum</span>
           </div>
+          <Button
+            variant="outline"
+            size="icon"
+            className="rounded-full"
+            onClick={() => currentWordAudio && speakWord(currentWordAudio)}
+          >
+            <Volume2 className="w-5 h-5" />
+          </Button>
           <div className="flex items-center gap-2 text-warning">
             <span>Bilmiyorum</span>
             <div className="text-2xl">←</div>
