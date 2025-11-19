@@ -9,9 +9,17 @@ import {
   createLearningSession,
 } from "@/utils/wordParser";
 import { Button } from "@/components/ui/button";
-import { List, RotateCcw } from "lucide-react";
+import { List, RotateCcw, Undo } from "lucide-react";
 import { toast } from "sonner";
 import wordsCSV from "@/data/words.csv?raw";
+
+const SESSION_STORAGE_KEY = "flashcard-session";
+
+interface HistoryEntry {
+  wordId: string;
+  previousStars: Word["stars"];
+  index: number;
+}
 
 const Index = () => {
   const [allWords, setAllWords] = useState<Word[]>([]);
@@ -19,25 +27,91 @@ const Index = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showAllWords, setShowAllWords] = useState(false);
   const [sessionComplete, setSessionComplete] = useState(false);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
 
   useEffect(() => {
     const parsed = parseCSV(wordsCSV);
     const withProgress = getWordsWithProgress(parsed);
     setAllWords(withProgress);
-    startNewSession(withProgress);
+    
+    // Try to load saved session
+    const savedSession = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (savedSession) {
+      try {
+        const { sessionWords: savedSessionWords, currentIndex: savedIndex } = JSON.parse(savedSession);
+        setSessionWords(savedSessionWords);
+        setCurrentIndex(savedIndex);
+        setSessionComplete(false);
+      } catch {
+        startNewSession(withProgress);
+      }
+    } else {
+      startNewSession(withProgress);
+    }
   }, []);
+
+  // Save session to localStorage whenever it changes
+  useEffect(() => {
+    if (sessionWords.length > 0 && !sessionComplete) {
+      localStorage.setItem(
+        SESSION_STORAGE_KEY,
+        JSON.stringify({ sessionWords, currentIndex })
+      );
+    } else if (sessionComplete) {
+      localStorage.removeItem(SESSION_STORAGE_KEY);
+    }
+  }, [sessionWords, currentIndex, sessionComplete]);
 
   const startNewSession = (words: Word[]) => {
     const session = createLearningSession(words);
     setSessionWords(session);
     setCurrentIndex(0);
     setSessionComplete(false);
+    setHistory([]);
+    localStorage.removeItem(SESSION_STORAGE_KEY);
+  };
+
+  const handleFlip = () => {
+    if (currentIndex >= sessionWords.length) return;
+    
+    const currentWord = sessionWords[currentIndex];
+    
+    // If word is not already 1 star, make it 1 star
+    if (currentWord.stars !== 1) {
+      // Save to history
+      setHistory([...history, {
+        wordId: currentWord.id,
+        previousStars: currentWord.stars,
+        index: currentIndex,
+      }]);
+
+      // Update to 1 star
+      updateWordStars(currentWord.id, 1);
+      
+      const updatedAllWords = allWords.map((w) =>
+        w.id === currentWord.id ? { ...w, stars: 1 as Word["stars"] } : w
+      );
+      setAllWords(updatedAllWords);
+      
+      const updatedSessionWords = sessionWords.map((w) =>
+        w.id === currentWord.id ? { ...w, stars: 1 as Word["stars"] } : w
+      );
+      setSessionWords(updatedSessionWords);
+    }
   };
 
   const handleSwipe = (direction: "left" | "right") => {
     if (currentIndex >= sessionWords.length) return;
 
     const currentWord = sessionWords[currentIndex];
+    
+    // Save to history before making changes
+    setHistory([...history, {
+      wordId: currentWord.id,
+      previousStars: currentWord.stars,
+      index: currentIndex,
+    }]);
+    
     const newStars: typeof currentWord.stars = 
       direction === "right" 
         ? (Math.min(currentWord.stars + 1, 5) as typeof currentWord.stars)
@@ -51,6 +125,11 @@ const Index = () => {
       w.id === currentWord.id ? { ...w, stars: newStars } : w
     );
     setAllWords(updatedAllWords);
+    
+    const updatedSessionWords = sessionWords.map((w) =>
+      w.id === currentWord.id ? { ...w, stars: newStars } : w
+    );
+    setSessionWords(updatedSessionWords);
 
     // Show feedback
     toast[direction === "right" ? "success" : "info"](
@@ -66,6 +145,34 @@ const Index = () => {
     } else {
       setCurrentIndex(currentIndex + 1);
     }
+  };
+
+  const handleUndo = () => {
+    if (history.length === 0) return;
+    
+    const lastEntry = history[history.length - 1];
+    
+    // Restore previous stars
+    updateWordStars(lastEntry.wordId, lastEntry.previousStars);
+    
+    const updatedAllWords = allWords.map((w) =>
+      w.id === lastEntry.wordId ? { ...w, stars: lastEntry.previousStars } : w
+    );
+    setAllWords(updatedAllWords);
+    
+    const updatedSessionWords = sessionWords.map((w) =>
+      w.id === lastEntry.wordId ? { ...w, stars: lastEntry.previousStars } : w
+    );
+    setSessionWords(updatedSessionWords);
+    
+    // Go back to that card
+    setCurrentIndex(lastEntry.index);
+    setSessionComplete(false);
+    
+    // Remove from history
+    setHistory(history.slice(0, -1));
+    
+    toast.info("Geri alındı", { duration: 1500 });
   };
 
   const handleRestart = () => {
@@ -88,14 +195,25 @@ const Index = () => {
               : `${currentIndex + 1} / ${sessionWords.length}`}
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="icon"
-          className="rounded-full"
-          onClick={() => setShowAllWords(true)}
-        >
-          <List className="w-5 h-5" />
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="icon"
+            className="rounded-full"
+            onClick={handleUndo}
+            disabled={history.length === 0}
+          >
+            <Undo className="w-5 h-5" />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            className="rounded-full"
+            onClick={() => setShowAllWords(true)}
+          >
+            <List className="w-5 h-5" />
+          </Button>
+        </div>
       </header>
 
       {/* Card Stack */}
@@ -135,6 +253,7 @@ const Index = () => {
                   opacity: 1 - index * 0.3,
                 }}
                 onSwipe={index === 0 ? handleSwipe : undefined}
+                onFlip={index === 0 ? handleFlip : undefined}
               />
             ))}
           </>

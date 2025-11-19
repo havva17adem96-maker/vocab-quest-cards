@@ -70,8 +70,24 @@ export function createLearningSession(words: Word[]): Word[] {
     }
   });
 
-  // Shuffle the session
-  return session.sort(() => Math.random() - 0.5);
+  // Shuffle without consecutive duplicates
+  const shuffled = session.sort(() => Math.random() - 0.5);
+  
+  // Prevent consecutive duplicates
+  for (let i = 1; i < shuffled.length; i++) {
+    if (shuffled[i].id === shuffled[i - 1].id) {
+      // Find a different word to swap with
+      let swapIndex = i + 1;
+      while (swapIndex < shuffled.length && shuffled[swapIndex].id === shuffled[i].id) {
+        swapIndex++;
+      }
+      if (swapIndex < shuffled.length) {
+        [shuffled[i], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[i]];
+      }
+    }
+  }
+  
+  return shuffled;
 }
 
 export function groupWordsByStars(words: Word[]): Record<StarLevel, Word[]> {
