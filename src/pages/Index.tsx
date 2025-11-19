@@ -10,7 +10,7 @@ import {
   createLearningSession,
 } from "@/utils/wordParser";
 import { Button } from "@/components/ui/button";
-import { List, RotateCcw, Undo, Volume2 } from "lucide-react";
+import { List, RotateCcw, Undo, Volume2, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import wordsCSV from "@/data/words.csv?raw";
 import { Progress } from "@/components/ui/progress";
@@ -31,6 +31,7 @@ const Index = () => {
   const [sessionComplete, setSessionComplete] = useState(false);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [currentWordAudio, setCurrentWordAudio] = useState<string>("");
+  const [showWord, setShowWord] = useState(true);
 
   useEffect(() => {
     const parsed = parseCSV(wordsCSV);
@@ -256,6 +257,24 @@ const Index = () => {
         <div className="flex gap-2">
           <Button
             variant="outline"
+            size="sm"
+            onClick={() => setShowWord(!showWord)}
+            className="gap-2"
+          >
+            {showWord ? (
+              <>
+                <EyeOff className="w-4 h-4" />
+                Hide Word
+              </>
+            ) : (
+              <>
+                <Eye className="w-4 h-4" />
+                Show Word
+              </>
+            )}
+          </Button>
+          <Button
+            variant="outline"
             size="icon"
             className="rounded-full"
             onClick={handleUndo}
@@ -312,6 +331,7 @@ const Index = () => {
                 }}
                 onSwipe={index === 0 ? handleSwipe : undefined}
                 onFlip={index === 0 ? handleFlip : undefined}
+                showWord={showWord}
               />
             ))}
           </>
