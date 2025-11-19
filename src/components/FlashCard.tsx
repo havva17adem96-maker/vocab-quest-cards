@@ -8,9 +8,10 @@ interface FlashCardProps {
   style?: React.CSSProperties;
   onSwipe?: (direction: "left" | "right") => void;
   onFlip?: () => void;
+  showWord?: boolean;
 }
 
-export function FlashCard({ word, style, onSwipe, onFlip }: FlashCardProps) {
+export function FlashCard({ word, style, onSwipe, onFlip, showWord = true }: FlashCardProps) {
   const [isFlipped, setIsFlipped] = useState(false);
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(
     null
@@ -135,10 +136,19 @@ export function FlashCard({ word, style, onSwipe, onFlip }: FlashCardProps) {
               />
             ))}
           </div>
-          <h2 className="text-5xl font-bold text-foreground text-center mb-4">
-            {word.english}
-          </h2>
-          <p className="text-muted-foreground text-sm">Çevirmek için tıkla</p>
+          {showWord ? (
+            <>
+              <h2 className="text-5xl font-bold text-foreground text-center mb-4">
+                {word.english}
+              </h2>
+              <p className="text-muted-foreground text-sm">Çevirmek için tıkla</p>
+            </>
+          ) : (
+            <div className="flex flex-col items-center gap-4">
+              <div className="text-6xl">🤔</div>
+              <p className="text-muted-foreground text-center">Dinle ve hatırlamaya çalış</p>
+            </div>
+          )}
         </div>
 
         {/* Back (Turkish) */}
