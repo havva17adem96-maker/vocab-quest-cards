@@ -35,20 +35,10 @@ const Index = () => {
   useEffect(() => {
     if (allWords.length === 0 || sessionInitialized) return;
     
-    // Try to load saved session
-    const savedSession = localStorage.getItem(SESSION_STORAGE_KEY);
-    if (savedSession) {
-      try {
-        const { sessionWords: savedSessionWords, currentIndex: savedIndex } = JSON.parse(savedSession);
-        setSessionWords(savedSessionWords);
-        setCurrentIndex(savedIndex);
-        setSessionComplete(false);
-      } catch {
-        startNewSession(allWords);
-      }
-    } else {
-      startNewSession(allWords);
-    }
+    // Clear old localStorage data and start fresh with Supabase words
+    localStorage.removeItem(SESSION_STORAGE_KEY);
+    localStorage.removeItem("flashcard-progress");
+    startNewSession(allWords);
     setSessionInitialized(true);
   }, [allWords, sessionInitialized]);
 
