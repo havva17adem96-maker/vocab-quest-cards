@@ -4,15 +4,13 @@ import { Word } from "@/types/word";
 import { FlashCard } from "@/components/FlashCard";
 import { AllWordsModal } from "@/components/AllWordsModal";
 import {
-  parseCSV,
-  getWordsWithProgress,
   updateWordStars,
   createLearningSession,
 } from "@/utils/wordParser";
+import { useWords } from "@/hooks/useWords";
 import { Button } from "@/components/ui/button";
-import { List, RotateCcw, Undo, Volume2, Eye, EyeOff } from "lucide-react";
+import { List, RotateCcw, Undo, Volume2, Eye, EyeOff, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import wordsCSV from "@/data/words.csv?raw";
 import { Progress } from "@/components/ui/progress";
 
 const SESSION_STORAGE_KEY = "flashcard-session";
@@ -24,7 +22,7 @@ interface HistoryEntry {
 }
 
 const Index = () => {
-  const [allWords, setAllWords] = useState<Word[]>([]);
+  const { words: allWords, setWords: setAllWords, loading, error, refetch } = useWords();
   const [sessionWords, setSessionWords] = useState<Word[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showAllWords, setShowAllWords] = useState(false);
@@ -32,11 +30,10 @@ const Index = () => {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [currentWordAudio, setCurrentWordAudio] = useState<string>("");
   const [showWord, setShowWord] = useState(true);
+  const [sessionInitialized, setSessionInitialized] = useState(false);
 
   useEffect(() => {
-    const parsed = parseCSV(wordsCSV);
-    const withProgress = getWordsWithProgress(parsed);
-    setAllWords(withProgress);
+    if (allWords.length === 0 || sessionInitialized) return;
     
     // Try to load saved session
     const savedSession = localStorage.getItem(SESSION_STORAGE_KEY);
@@ -47,12 +44,13 @@ const Index = () => {
         setCurrentIndex(savedIndex);
         setSessionComplete(false);
       } catch {
-        startNewSession(withProgress);
+        startNewSession(allWords);
       }
     } else {
-      startNewSession(withProgress);
+      startNewSession(allWords);
     }
-  }, []);
+    setSessionInitialized(true);
+  }, [allWords, sessionInitialized]);
 
   // Save session to localStorage whenever it changes
   useEffect(() => {
@@ -295,7 +293,17 @@ const Index = () => {
 
       {/* Card Stack */}
       <div className="flex-1 relative max-w-2xl w-full mx-auto">
-        {sessionComplete ? (
+        {loading ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center">
+            <RefreshCw className="w-8 h-8 animate-spin text-primary mb-4" />
+            <p className="text-muted-foreground">Kelimeler yükleniyor...</p>
+          </div>
+        ) : error ? (
+          <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center">
+            <p className="text-destructive mb-4">{error}</p>
+            <Button onClick={refetch}>Tekrar Dene</Button>
+          </div>
+        ) : sessionComplete ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center">
             <div className="text-6xl mb-4">🎉</div>
             <h2 className="text-3xl font-bold mb-2">Tebrikler!</h2>
