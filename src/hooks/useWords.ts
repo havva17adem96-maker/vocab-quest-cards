@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Word, StarLevel } from '@/types/word';
-import { loadProgress, getWordsWithProgress } from '@/utils/wordParser';
+import { loadProgress } from '@/utils/wordParser';
 
 interface LearnedWord {
-  id: number;
-  word_id: string;
+  id: string;
   english: string;
   turkish: string;
-  level: string;
-  created_at: string;
+  frequency_group: string;
+  star_rating: number;
+  is_flipped: boolean;
+  added_at: string;
 }
 
 export function useWords() {
@@ -22,20 +23,28 @@ export function useWords() {
       const { data, error } = await supabase
         .from('learned_words')
         .select('*')
-        .order('id', { ascending: true });
+        .order('added_at', { ascending: true });
 
       if (error) throw error;
 
-      const parsedWords: Word[] = (data as LearnedWord[]).map((item) => ({
-        id: item.word_id || item.id.toString(),
-        english: item.english,
-        turkish: item.turkish,
-        level: item.level || 'A1',
-        stars: 0 as StarLevel,
-      }));
+      // Get local progress to merge with Supabase data
+      const localProgress = loadProgress();
 
-      const withProgress = getWordsWithProgress(parsedWords);
-      setWords(withProgress);
+      const parsedWords: Word[] = (data as LearnedWord[]).map((item) => {
+        // Use local progress if available, otherwise use star_rating from DB
+        const localStars = localProgress[item.id];
+        const stars = localStars !== undefined ? localStars : (item.star_rating as StarLevel);
+        
+        return {
+          id: item.id,
+          english: item.english.trim(),
+          turkish: item.turkish.trim(),
+          level: item.frequency_group || '1k',
+          stars: Math.min(5, Math.max(0, stars)) as StarLevel,
+        };
+      });
+
+      setWords(parsedWords);
       setError(null);
     } catch (err) {
       console.error('Error fetching words:', err);
