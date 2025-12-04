@@ -6,6 +6,7 @@ export interface Word {
   turkish: string;
   level: string;
   stars: StarLevel;
+  packageId: string | null;
 }
 
 export interface WordProgress {

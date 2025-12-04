@@ -19,6 +19,7 @@ export function parseCSV(csvContent: string): Word[] {
         turkish: parts[2],
         level: parts[3] || "A1",
         stars: 0, // New words start with 0 stars (New group)
+        packageId: parts[4] || null,
       });
     }
   }

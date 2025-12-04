@@ -11,6 +11,7 @@ interface LearnedWord {
   star_rating: number;
   is_flipped: boolean;
   added_at: string;
+  package_id: string | null;
 }
 
 export function useWords() {
@@ -41,6 +42,7 @@ export function useWords() {
           turkish: item.turkish.trim(),
           level: item.frequency_group || '1k',
           stars: Math.min(5, Math.max(0, stars)) as StarLevel,
+          packageId: item.package_id,
         };
       });
 

@@ -40,14 +40,14 @@ const Index = () => {
 
   // Get unique packages from words
   const packages = useMemo(() => {
-    const uniquePackages = [...new Set(allWords.map((w) => w.level))].filter(Boolean);
+    const uniquePackages = [...new Set(allWords.map((w) => w.packageId))].filter((p): p is string => p !== null);
     return uniquePackages.sort();
   }, [allWords]);
 
   // Filter words by selected package
   const filteredWords = useMemo(() => {
     if (selectedPackage === null) return allWords;
-    return allWords.filter((w) => w.level === selectedPackage);
+    return allWords.filter((w) => w.packageId === selectedPackage);
   }, [allWords, selectedPackage]);
 
   // Load saved session on mount
@@ -94,7 +94,7 @@ const Index = () => {
   }, [sessionWords, currentIndex, sessionComplete, selectedPackage, sessionInitialized]);
 
   const startNewSession = (words: Word[], pkg: string | null) => {
-    const wordsToUse = pkg === null ? words : words.filter((w) => w.level === pkg);
+    const wordsToUse = pkg === null ? words : words.filter((w) => w.packageId === pkg);
     if (wordsToUse.length === 0) {
       toast.error("Bu pakette kelime yok");
       return;
