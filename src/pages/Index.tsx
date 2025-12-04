@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import React from "react";
 import { Word } from "@/types/word";
 import { FlashCard } from "@/components/FlashCard";
 import { AllWordsModal } from "@/components/AllWordsModal";
+import { PackageSelector } from "@/components/PackageSelector";
 import {
   updateWordStars,
   createLearningSession,
@@ -12,8 +13,12 @@ import { Button } from "@/components/ui/button";
 import { List, RotateCcw, Undo, Volume2, Eye, EyeOff, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Progress } from "@/components/ui/progress";
-
-const SESSION_STORAGE_KEY = "flashcard-session";
+import {
+  updateWordStarsInSupabase,
+  saveSessionState,
+  loadSessionState,
+  clearSessionState,
+} from "@/hooks/useSupabaseProgress";
 
 interface HistoryEntry {
   wordId: string;
@@ -31,36 +36,80 @@ const Index = () => {
   const [currentWordAudio, setCurrentWordAudio] = useState<string>("");
   const [showWord, setShowWord] = useState(true);
   const [sessionInitialized, setSessionInitialized] = useState(false);
+  const [selectedPackage, setSelectedPackage] = useState<string | null>(null);
 
+  // Get unique packages from words
+  const packages = useMemo(() => {
+    const uniquePackages = [...new Set(allWords.map((w) => w.level))].filter(Boolean);
+    return uniquePackages.sort();
+  }, [allWords]);
+
+  // Filter words by selected package
+  const filteredWords = useMemo(() => {
+    if (selectedPackage === null) return allWords;
+    return allWords.filter((w) => w.level === selectedPackage);
+  }, [allWords, selectedPackage]);
+
+  // Load saved session on mount
   useEffect(() => {
     if (allWords.length === 0 || sessionInitialized) return;
-    
-    // Clear old localStorage data and start fresh with Supabase words
-    localStorage.removeItem(SESSION_STORAGE_KEY);
+
+    const savedState = loadSessionState();
+    if (savedState) {
+      setSelectedPackage(savedState.selectedPackage);
+      
+      // Rebuild session words from saved IDs
+      const wordsMap = new Map(allWords.map((w) => [w.id, w]));
+      const rebuiltSession = savedState.sessionWordIds
+        .map((id) => wordsMap.get(id))
+        .filter((w): w is Word => w !== undefined);
+
+      if (rebuiltSession.length > 0 && savedState.currentIndex < rebuiltSession.length) {
+        setSessionWords(rebuiltSession);
+        setCurrentIndex(savedState.currentIndex);
+        setSessionComplete(false);
+        setSessionInitialized(true);
+        return;
+      }
+    }
+
+    // Clear old localStorage data and start fresh
     localStorage.removeItem("flashcard-progress");
-    startNewSession(allWords);
+    clearSessionState();
+    startNewSession(allWords, null);
     setSessionInitialized(true);
   }, [allWords, sessionInitialized]);
 
-  // Save session to localStorage whenever it changes
+  // Save session state whenever it changes
   useEffect(() => {
-    if (sessionWords.length > 0 && !sessionComplete) {
-      localStorage.setItem(
-        SESSION_STORAGE_KEY,
-        JSON.stringify({ sessionWords, currentIndex })
-      );
+    if (sessionWords.length > 0 && !sessionComplete && sessionInitialized) {
+      saveSessionState({
+        selectedPackage,
+        currentIndex,
+        sessionWordIds: sessionWords.map((w) => w.id),
+      });
     } else if (sessionComplete) {
-      localStorage.removeItem(SESSION_STORAGE_KEY);
+      clearSessionState();
     }
-  }, [sessionWords, currentIndex, sessionComplete]);
+  }, [sessionWords, currentIndex, sessionComplete, selectedPackage, sessionInitialized]);
 
-  const startNewSession = (words: Word[]) => {
-    const session = createLearningSession(words);
+  const startNewSession = (words: Word[], pkg: string | null) => {
+    const wordsToUse = pkg === null ? words : words.filter((w) => w.level === pkg);
+    if (wordsToUse.length === 0) {
+      toast.error("Bu pakette kelime yok");
+      return;
+    }
+    const session = createLearningSession(wordsToUse);
     setSessionWords(session);
     setCurrentIndex(0);
     setSessionComplete(false);
     setHistory([]);
-    localStorage.removeItem(SESSION_STORAGE_KEY);
+    clearSessionState();
+  };
+
+  const handlePackageChange = (pkg: string | null) => {
+    setSelectedPackage(pkg);
+    startNewSession(allWords, pkg);
   };
 
   const speakWord = (word: string) => {
@@ -68,27 +117,25 @@ const Index = () => {
       const utterance = new SpeechSynthesisUtterance(word);
       utterance.lang = 'en-US';
       utterance.rate = 0.8;
-      speechSynthesis.cancel(); // Cancel any ongoing speech
+      speechSynthesis.cancel();
       speechSynthesis.speak(utterance);
     }
   };
 
-  const handleFlip = () => {
+  const handleFlip = async () => {
     if (currentIndex >= sessionWords.length) return;
     
     const currentWord = sessionWords[currentIndex];
     
-    // If word is not already 1 star, make it 1 star
     if (currentWord.stars !== 1) {
-      // Save to history
       setHistory([...history, {
         wordId: currentWord.id,
         previousStars: currentWord.stars,
         index: currentIndex,
       }]);
 
-      // Update to 1 star
       updateWordStars(currentWord.id, 1);
+      await updateWordStarsInSupabase(currentWord.id, 1);
       
       const updatedAllWords = allWords.map((w) =>
         w.id === currentWord.id ? { ...w, stars: 1 as Word["stars"] } : w
@@ -102,19 +149,17 @@ const Index = () => {
     }
   };
 
-  const handleSwipe = (direction: "left" | "right") => {
+  const handleSwipe = async (direction: "left" | "right") => {
     if (currentIndex >= sessionWords.length) return;
 
     const currentWord = sessionWords[currentIndex];
     
-    // Save to history before making changes
     setHistory([...history, {
       wordId: currentWord.id,
       previousStars: currentWord.stars,
       index: currentIndex,
     }]);
     
-    // If card was flipped (set to 1 star), keep it at 1 star regardless of swipe direction
     const newStars: typeof currentWord.stars = 
       currentWord.stars === 1 
         ? 1
@@ -122,10 +167,10 @@ const Index = () => {
           ? (Math.min(currentWord.stars + 1, 5) as typeof currentWord.stars)
           : 1);
 
-    // Update progress
+    // Update progress locally and in Supabase
     updateWordStars(currentWord.id, newStars);
+    await updateWordStarsInSupabase(currentWord.id, newStars);
 
-    // Update local state
     const updatedAllWords = allWords.map((w) =>
       w.id === currentWord.id ? { ...w, stars: newStars } : w
     );
@@ -136,7 +181,6 @@ const Index = () => {
     );
     setSessionWords(updatedSessionWords);
 
-    // Show feedback
     toast[direction === "right" ? "success" : "info"](
       direction === "right"
         ? `"${currentWord.english}" → ${newStars} Yıldız! 🌟`
@@ -144,7 +188,6 @@ const Index = () => {
       { duration: 2000 }
     );
 
-    // Move to next card
     if (currentIndex + 1 >= sessionWords.length) {
       setSessionComplete(true);
     } else {
@@ -152,13 +195,13 @@ const Index = () => {
     }
   };
 
-  const handleUndo = () => {
+  const handleUndo = async () => {
     if (history.length === 0) return;
     
     const lastEntry = history[history.length - 1];
     
-    // Restore previous stars
     updateWordStars(lastEntry.wordId, lastEntry.previousStars);
+    await updateWordStarsInSupabase(lastEntry.wordId, lastEntry.previousStars);
     
     const updatedAllWords = allWords.map((w) =>
       w.id === lastEntry.wordId ? { ...w, stars: lastEntry.previousStars } : w
@@ -170,44 +213,36 @@ const Index = () => {
     );
     setSessionWords(updatedSessionWords);
     
-    // Go back to that card
     setCurrentIndex(lastEntry.index);
     setSessionComplete(false);
-    
-    // Remove from history
     setHistory(history.slice(0, -1));
     
     toast.info("Geri alındı", { duration: 1500 });
   };
 
   const handleRestart = () => {
-    startNewSession(allWords);
+    startNewSession(allWords, selectedPackage);
   };
 
-  // Calculate progress percentage
   const calculateProgress = () => {
-    if (allWords.length === 0) return 0;
+    if (filteredWords.length === 0) return 0;
     
-    // Calculate next session size based on current star levels
     let nextSessionSize = 0;
-    allWords.forEach((word) => {
+    filteredWords.forEach((word) => {
       const repeatCount = word.stars === 0 ? 1 : 6 - word.stars;
       nextSessionSize += repeatCount;
     });
     
-    const minSize = allWords.length; // All 5 stars
-    const maxSize = allWords.length * 5; // All 1 star
+    const minSize = filteredWords.length;
+    const maxSize = filteredWords.length * 5;
     
-    // Progress: closer to minSize = higher progress
     const progress = ((maxSize - nextSessionSize) / (maxSize - minSize)) * 100;
     return Math.max(0, Math.min(100, progress));
   };
 
   const progressPercentage = calculateProgress();
-
   const visibleCards = sessionWords.slice(currentIndex, currentIndex + 3);
 
-  // Speak the word when a new card is shown
   React.useEffect(() => {
     if (visibleCards.length > 0 && !sessionComplete) {
       const word = visibleCards[0].english;
@@ -218,8 +253,19 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-secondary flex flex-col">
+      {/* Package Selector */}
+      <div className="p-4 pb-2">
+        <div className="max-w-2xl mx-auto">
+          <PackageSelector
+            packages={packages}
+            selectedPackage={selectedPackage}
+            onSelectPackage={handlePackageChange}
+          />
+        </div>
+      </div>
+
       {/* Progress Bar */}
-      <div className="p-4 pb-0">
+      <div className="p-4 pb-0 pt-2">
         <div className="max-w-2xl mx-auto">
           <div className="flex items-center gap-3">
             <Progress value={progressPercentage} className="flex-1" />
@@ -360,7 +406,7 @@ const Index = () => {
 
       {/* All Words Modal */}
       <AllWordsModal
-        words={allWords}
+        words={filteredWords}
         open={showAllWords}
         onOpenChange={setShowAllWords}
       />
