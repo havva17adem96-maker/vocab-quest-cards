@@ -20,6 +20,7 @@ export function parseCSV(csvContent: string): Word[] {
         level: parts[3] || "A1",
         stars: 0, // New words start with 0 stars (New group)
         packageId: parts[4] || null,
+        packageName: parts[5] || null,
       });
     }
   }

@@ -7,6 +7,7 @@ export interface Word {
   level: string;
   stars: StarLevel;
   packageId: string | null;
+  packageName: string | null;
 }
 
 export interface WordProgress {
