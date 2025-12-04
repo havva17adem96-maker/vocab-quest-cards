@@ -15,19 +15,33 @@ interface LearnedWord {
   package_name: string | null;
 }
 
+// Get user_id from URL parameters
+function getUserIdFromUrl(): string | null {
+  const urlParams = new URLSearchParams(window.location.search);
+  return urlParams.get('user_id');
+}
+
 export function useWords() {
   const [words, setWords] = useState<Word[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const userId = getUserIdFromUrl();
 
   const fetchWords = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('learned_words')
         .select('*')
         .order('added_at', { ascending: true });
 
-      if (error) throw error;
+      // Filter by user_id if provided in URL
+      if (userId) {
+        query = query.eq('user_id', userId);
+      }
+
+      const { data, error: queryError } = await query;
+
+      if (queryError) throw queryError;
 
       // Get local progress to merge with Supabase data
       const localProgress = loadProgress();
@@ -81,7 +95,7 @@ export function useWords() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [userId]);
 
   return { words, setWords, loading, error, refetch: fetchWords };
 }
