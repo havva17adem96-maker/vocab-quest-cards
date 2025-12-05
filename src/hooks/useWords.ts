@@ -30,17 +30,12 @@ export function useWords() {
 
   const fetchWords = async () => {
     try {
-      let query = supabase
+      // learned_words is shared - no user_id filter
+      // Progress tracking is per-user via flashcard_progress table
+      const { data, error: queryError } = await supabase
         .from('learned_words')
         .select('*')
         .order('added_at', { ascending: true });
-
-      // Filter by user_id if provided in URL
-      if (userId) {
-        query = query.eq('user_id', userId);
-      }
-
-      const { data, error: queryError } = await query;
 
       if (queryError) throw queryError;
 
