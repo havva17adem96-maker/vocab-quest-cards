@@ -29,16 +29,19 @@ export async function updateWordStarsInSupabase(
 ): Promise<void> {
   const uid = userId || getUserIdFromUrl();
   
-  let query = supabase
-    .from("learned_words")
-    .update({ star_rating: stars })
-    .eq("id", wordId);
-
-  if (uid) {
-    query = query.eq("user_id", uid);
+  if (!uid) {
+    console.error("No user_id available for updating star rating");
+    return;
   }
 
-  const { error } = await query;
+  const { error } = await supabase
+    .from("user_word_progress")
+    .upsert({
+      user_id: uid,
+      word_id: wordId,
+      star_rating: stars,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'user_id,word_id' });
 
   if (error) {
     console.error("Error updating star rating:", error);

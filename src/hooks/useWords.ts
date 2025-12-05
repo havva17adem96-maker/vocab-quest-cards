@@ -30,22 +30,42 @@ export function useWords() {
 
   const fetchWords = async () => {
     try {
-      // learned_words is shared - no user_id filter
-      // Progress tracking is per-user via flashcard_progress table
-      const { data, error: queryError } = await supabase
+      // Fetch all words from learned_words (shared across users)
+      const { data: wordsData, error: wordsError } = await supabase
         .from('learned_words')
         .select('*')
         .order('added_at', { ascending: true });
 
-      if (queryError) throw queryError;
+      if (wordsError) throw wordsError;
 
-      // Get local progress to merge with Supabase data
+      // Fetch user-specific star ratings from user_word_progress
+      let userProgress: Record<string, number> = {};
+      if (userId) {
+        const { data: progressData, error: progressError } = await supabase
+          .from('user_word_progress')
+          .select('word_id, star_rating')
+          .eq('user_id', userId);
+
+        if (progressError) {
+          console.error('Error fetching user progress:', progressError);
+        } else if (progressData) {
+          userProgress = progressData.reduce((acc, item) => {
+            acc[item.word_id] = item.star_rating;
+            return acc;
+          }, {} as Record<string, number>);
+        }
+      }
+
+      // Get local progress as fallback
       const localProgress = loadProgress();
 
-      const parsedWords: Word[] = (data as LearnedWord[]).map((item) => {
-        // Use local progress if available, otherwise use star_rating from DB
+      const parsedWords: Word[] = (wordsData as LearnedWord[]).map((item) => {
+        // Priority: user_word_progress > local progress > default (0)
+        const userStars = userProgress[item.id];
         const localStars = localProgress[item.id];
-        const stars = localStars !== undefined ? localStars : (item.star_rating as StarLevel);
+        const stars = userStars !== undefined 
+          ? userStars 
+          : (localStars !== undefined ? localStars : 0);
         
         return {
           id: item.id,
