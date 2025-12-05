@@ -18,6 +18,10 @@ import {
   saveSessionState,
   loadSessionState,
   clearSessionState,
+  getUserIdFromUrl,
+  loadProgressFromSupabase,
+  saveProgressToSupabase,
+  clearProgressFromSupabase,
 } from "@/hooks/useSupabaseProgress";
 
 interface HistoryEntry {
@@ -37,6 +41,7 @@ const Index = () => {
   const [showWord, setShowWord] = useState(true);
   const [sessionInitialized, setSessionInitialized] = useState(false);
   const [selectedPackage, setSelectedPackage] = useState<string | null>(null);
+  const [userId] = useState<string | null>(() => getUserIdFromUrl());
 
   // Get unique packages from words
   const packages = useMemo(() => {
@@ -54,44 +59,64 @@ const Index = () => {
   useEffect(() => {
     if (allWords.length === 0 || sessionInitialized) return;
 
-    const savedState = loadSessionState();
-    if (savedState) {
-      setSelectedPackage(savedState.selectedPackage);
+    const loadSavedSession = async () => {
+      // Try loading from Supabase first if userId exists
+      let savedState = userId ? await loadProgressFromSupabase(userId) : null;
       
-      // Rebuild session words from saved IDs
-      const wordsMap = new Map(allWords.map((w) => [w.id, w]));
-      const rebuiltSession = savedState.sessionWordIds
-        .map((id) => wordsMap.get(id))
-        .filter((w): w is Word => w !== undefined);
-
-      if (rebuiltSession.length > 0 && savedState.currentIndex < rebuiltSession.length) {
-        setSessionWords(rebuiltSession);
-        setCurrentIndex(savedState.currentIndex);
-        setSessionComplete(false);
-        setSessionInitialized(true);
-        return;
+      // Fall back to localStorage if no Supabase data
+      if (!savedState) {
+        savedState = loadSessionState();
       }
-    }
 
-    // Clear old localStorage data and start fresh
-    localStorage.removeItem("flashcard-progress");
-    clearSessionState();
-    startNewSession(allWords, null);
-    setSessionInitialized(true);
-  }, [allWords, sessionInitialized]);
+      if (savedState) {
+        setSelectedPackage(savedState.selectedPackage);
+        
+        // Rebuild session words from saved IDs
+        const wordsMap = new Map(allWords.map((w) => [w.id, w]));
+        const rebuiltSession = savedState.sessionWordIds
+          .map((id) => wordsMap.get(id))
+          .filter((w): w is Word => w !== undefined);
+
+        if (rebuiltSession.length > 0 && savedState.currentIndex < rebuiltSession.length) {
+          setSessionWords(rebuiltSession);
+          setCurrentIndex(savedState.currentIndex);
+          setSessionComplete(false);
+          setSessionInitialized(true);
+          return;
+        }
+      }
+
+      // Clear old localStorage data and start fresh
+      localStorage.removeItem("flashcard-progress");
+      clearSessionState();
+      startNewSession(allWords, null);
+      setSessionInitialized(true);
+    };
+
+    loadSavedSession();
+  }, [allWords, sessionInitialized, userId]);
 
   // Save session state whenever it changes
   useEffect(() => {
+    const state = {
+      selectedPackage,
+      currentIndex,
+      sessionWordIds: sessionWords.map((w) => w.id),
+    };
+
     if (sessionWords.length > 0 && !sessionComplete && sessionInitialized) {
-      saveSessionState({
-        selectedPackage,
-        currentIndex,
-        sessionWordIds: sessionWords.map((w) => w.id),
-      });
+      saveSessionState(state);
+      // Also save to Supabase if userId exists
+      if (userId) {
+        saveProgressToSupabase(userId, state);
+      }
     } else if (sessionComplete) {
       clearSessionState();
+      if (userId) {
+        clearProgressFromSupabase(userId);
+      }
     }
-  }, [sessionWords, currentIndex, sessionComplete, selectedPackage, sessionInitialized]);
+  }, [sessionWords, currentIndex, sessionComplete, selectedPackage, sessionInitialized, userId]);
 
   const startNewSession = (words: Word[], pkg: string | null) => {
     const wordsToUse = pkg === null ? words : words.filter((w) => w.packageName === pkg);
@@ -135,7 +160,7 @@ const Index = () => {
       }]);
 
       updateWordStars(currentWord.id, 1);
-      await updateWordStarsInSupabase(currentWord.id, 1);
+      await updateWordStarsInSupabase(currentWord.id, 1, userId);
       
       const updatedAllWords = allWords.map((w) =>
         w.id === currentWord.id ? { ...w, stars: 1 as Word["stars"] } : w
@@ -169,7 +194,7 @@ const Index = () => {
 
     // Update progress locally and in Supabase
     updateWordStars(currentWord.id, newStars);
-    await updateWordStarsInSupabase(currentWord.id, newStars);
+    await updateWordStarsInSupabase(currentWord.id, newStars, userId);
 
     const updatedAllWords = allWords.map((w) =>
       w.id === currentWord.id ? { ...w, stars: newStars } : w
@@ -201,7 +226,7 @@ const Index = () => {
     const lastEntry = history[history.length - 1];
     
     updateWordStars(lastEntry.wordId, lastEntry.previousStars);
-    await updateWordStarsInSupabase(lastEntry.wordId, lastEntry.previousStars);
+    await updateWordStarsInSupabase(lastEntry.wordId, lastEntry.previousStars, userId);
     
     const updatedAllWords = allWords.map((w) =>
       w.id === lastEntry.wordId ? { ...w, stars: lastEntry.previousStars } : w
