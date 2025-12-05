@@ -434,6 +434,7 @@ const Index = () => {
         words={filteredWords}
         open={showAllWords}
         onOpenChange={setShowAllWords}
+        selectedPackage={selectedPackage}
       />
     </div>
   );
