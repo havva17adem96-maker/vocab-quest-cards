@@ -186,11 +186,9 @@ const Index = () => {
     }]);
     
     const newStars: typeof currentWord.stars = 
-      currentWord.stars === 1 
-        ? 1
-        : (direction === "right" 
-          ? (Math.min(currentWord.stars + 1, 5) as typeof currentWord.stars)
-          : 1);
+      direction === "right" 
+        ? (Math.min(currentWord.stars + 1, 5) as typeof currentWord.stars)
+        : 1;
 
     // Update progress locally and in Supabase
     updateWordStars(currentWord.id, newStars);
