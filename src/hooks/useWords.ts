@@ -13,6 +13,7 @@ interface LearnedWord {
   added_at: string;
   package_id: string | null;
   package_name: string | null;
+  user_id: string | null;
 }
 
 // Get user_id from URL parameters
