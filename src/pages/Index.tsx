@@ -22,6 +22,7 @@ import {
   loadProgressFromSupabase,
   saveProgressToSupabase,
   clearProgressFromSupabase,
+  addKartXP,
 } from "@/hooks/useSupabaseProgress";
 
 interface HistoryEntry {
@@ -193,6 +194,11 @@ const Index = () => {
     // Update progress locally and in Supabase
     updateWordStars(currentWord.id, newStars);
     await updateWordStarsInSupabase(currentWord.id, newStars, userId);
+
+    // Add XP on right swipe (correct answer)
+    if (direction === "right") {
+      await addKartXP(10, userId);
+    }
 
     const updatedAllWords = allWords.map((w) =>
       w.id === currentWord.id ? { ...w, stars: newStars } : w

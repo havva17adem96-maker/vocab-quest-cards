@@ -48,6 +48,34 @@ export async function updateWordStarsInSupabase(
   }
 }
 
+export async function addKartXP(xpToAdd: number, userId?: string | null): Promise<void> {
+  const uid = userId || getUserIdFromUrl();
+  
+  if (!uid) {
+    console.error("No user_id available for adding XP");
+    return;
+  }
+
+  // Get current XP
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("kart_xp")
+    .eq("user_id", uid)
+    .maybeSingle();
+
+  // Create profile if not exists, otherwise update
+  if (!profile) {
+    await supabase
+      .from("profiles")
+      .insert({ user_id: uid, kart_xp: xpToAdd });
+  } else {
+    await supabase
+      .from("profiles")
+      .update({ kart_xp: (profile.kart_xp || 0) + xpToAdd })
+      .eq("user_id", uid);
+  }
+}
+
 export async function loadProgressFromSupabase(userId: string): Promise<SessionState | null> {
   const { data, error } = await supabase
     .from("flashcard_progress")
