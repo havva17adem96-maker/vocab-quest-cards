@@ -40,6 +40,12 @@ const Index = () => {
   const [selectedPackage, setSelectedPackage] = useState<string>(() => urlPackageId || "all");
   const { words: unlockedWords, packages: unlockedPackages, loading, error, refetch } = useUnlockedWords(userId);
   
+  // Filter packages to show only the URL package (if exists) + "Tümü"
+  const filteredPackages = useMemo(() => {
+    if (!urlPackageId) return unlockedPackages;
+    return unlockedPackages.filter(pkg => pkg.id === urlPackageId);
+  }, [unlockedPackages, urlPackageId]);
+  
   // Convert unlocked words to Word type with stars
   const [allWords, setAllWords] = useState<Word[]>([]);
   const [sessionWords, setSessionWords] = useState<Word[]>([]);
@@ -301,7 +307,7 @@ const Index = () => {
       <div className="p-4 pb-2">
         <div className="max-w-2xl mx-auto">
           <PackageSelector
-            unlockedPackages={unlockedPackages}
+            unlockedPackages={filteredPackages}
             selectedPackage={selectedPackage}
             onSelect={handlePackageChange}
           />
