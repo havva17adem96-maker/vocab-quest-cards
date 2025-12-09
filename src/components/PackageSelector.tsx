@@ -1,55 +1,43 @@
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Package, ChevronDown, Check } from "lucide-react";
 
-interface PackageSelectorProps {
-  packages: string[];
-  selectedPackage: string | null;
-  onSelectPackage: (pkg: string | null) => void;
+interface UnlockedPackage {
+  id: string;
+  name: string;
 }
 
-export function PackageSelector({
-  packages,
-  selectedPackage,
-  onSelectPackage,
-}: PackageSelectorProps) {
-  const displayName = selectedPackage || "Tüm Kelimeler";
+interface PackageSelectorProps {
+  unlockedPackages: UnlockedPackage[];
+  selectedPackage: string;
+  onSelect: (packageId: string) => void;
+}
 
+export function PackageSelector({ 
+  unlockedPackages, 
+  selectedPackage, 
+  onSelect 
+}: PackageSelectorProps) {
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="outline" className="gap-2">
-          <Package className="w-4 h-4" />
-          {displayName}
-          <ChevronDown className="w-4 h-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-48 bg-background border border-border z-50">
-        <DropdownMenuItem
-          onClick={() => onSelectPackage(null)}
-          className="gap-2 cursor-pointer"
+    <div className="flex flex-wrap gap-2">
+      {/* Tüm Kelimeler butonu */}
+      <Button
+        variant={selectedPackage === "all" ? "default" : "outline"}
+        size="sm"
+        onClick={() => onSelect("all")}
+      >
+        Tümü
+      </Button>
+      
+      {/* Kilitsiz paketler */}
+      {unlockedPackages.map((pkg) => (
+        <Button
+          key={pkg.id}
+          variant={selectedPackage === pkg.id ? "default" : "outline"}
+          size="sm"
+          onClick={() => onSelect(pkg.id)}
         >
-          {selectedPackage === null && <Check className="w-4 h-4" />}
-          {selectedPackage !== null && <span className="w-4" />}
-          Tüm Kelimeler
-        </DropdownMenuItem>
-        {packages.map((pkg) => (
-          <DropdownMenuItem
-            key={pkg}
-            onClick={() => onSelectPackage(pkg)}
-            className="gap-2 cursor-pointer"
-          >
-            {selectedPackage === pkg && <Check className="w-4 h-4" />}
-            {selectedPackage !== pkg && <span className="w-4" />}
-            {pkg}
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+          {pkg.name}
+        </Button>
+      ))}
+    </div>
   );
 }
