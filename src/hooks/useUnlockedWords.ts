@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 interface UnlockedWord {
   id: string;
@@ -7,6 +8,7 @@ interface UnlockedWord {
   frequency_group: string;
   package_id: string;
   package_name: string;
+  star_rating?: number; // From user_word_progress
 }
 
 interface UnlockedPackage {
@@ -21,7 +23,7 @@ interface UnlockedData {
   totalUnlockedWords: number;
 }
 
-export const useUnlockedWords = (userId: string | null) => {
+export const useUnlockedWords = (userId: string | null, initialPackageId?: string | null) => {
   const [data, setData] = useState<UnlockedData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +47,30 @@ export const useUnlockedWords = (userId: string | null) => {
       const result = await response.json();
 
       if (response.ok) {
-        setData(result);
+        // Fetch user's star ratings from user_word_progress
+        const { data: progressData } = await supabase
+          .from("user_word_progress")
+          .select("word_id, star_rating")
+          .eq("user_id", userId);
+
+        // Create a map of word_id -> star_rating
+        const progressMap = new Map<string, number>();
+        if (progressData) {
+          progressData.forEach((p) => {
+            progressMap.set(p.word_id, p.star_rating);
+          });
+        }
+
+        // Merge star ratings into words
+        const wordsWithStars = result.words.map((word: UnlockedWord) => ({
+          ...word,
+          star_rating: progressMap.get(word.id) || 0,
+        }));
+
+        setData({
+          ...result,
+          words: wordsWithStars,
+        });
         setError(null);
       } else {
         setError(result.error || "Bir hata oluştu");
@@ -58,9 +83,14 @@ export const useUnlockedWords = (userId: string | null) => {
     }
   }, [userId]);
 
+  // Initial fetch with package_id from URL
   useEffect(() => {
-    fetchUnlockedWords();
-  }, [fetchUnlockedWords]);
+    if (initialPackageId && initialPackageId !== "all") {
+      fetchUnlockedWords(initialPackageId);
+    } else {
+      fetchUnlockedWords();
+    }
+  }, [fetchUnlockedWords, initialPackageId]);
 
   return { 
     data, 

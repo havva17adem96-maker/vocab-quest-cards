@@ -38,7 +38,7 @@ const Index = () => {
   const urlPackageId = searchParams.get("package_id");
   
   const [selectedPackage, setSelectedPackage] = useState<string>(() => urlPackageId || "all");
-  const { words: unlockedWords, packages: unlockedPackages, loading, error, refetch } = useUnlockedWords(userId);
+  const { words: unlockedWords, packages: unlockedPackages, loading, error, refetch } = useUnlockedWords(userId, urlPackageId);
   
   // Filter packages to show only the URL package (if exists) + "Tümü"
   const filteredPackages = useMemo(() => {
@@ -57,7 +57,7 @@ const Index = () => {
   const [showWord, setShowWord] = useState(true);
   const [sessionInitialized, setSessionInitialized] = useState(false);
 
-  // Convert unlocked words to Word format
+  // Convert unlocked words to Word format with star ratings from database
   useEffect(() => {
     if (unlockedWords.length > 0) {
       const words: Word[] = unlockedWords.map((w) => ({
@@ -65,7 +65,7 @@ const Index = () => {
         english: w.english,
         turkish: w.turkish,
         level: w.frequency_group,
-        stars: 0 as StarLevel,
+        stars: (w.star_rating || 0) as StarLevel,
         packageId: w.package_id,
         packageName: w.package_name,
       }));
