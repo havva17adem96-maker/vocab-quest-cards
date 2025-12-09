@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import React from "react";
-import { Word } from "@/types/word";
+import { useSearchParams } from "react-router-dom";
+import { Word, StarLevel } from "@/types/word";
 import { FlashCard } from "@/components/FlashCard";
 import { AllWordsModal } from "@/components/AllWordsModal";
 import { PackageSelector } from "@/components/PackageSelector";
@@ -8,7 +9,7 @@ import {
   updateWordStars,
   createLearningSession,
 } from "@/utils/wordParser";
-import { useWords } from "@/hooks/useWords";
+import { useUnlockedWords } from "@/hooks/useUnlockedWords";
 import { Button } from "@/components/ui/button";
 import { List, RotateCcw, Undo, Volume2, Eye, EyeOff, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
@@ -32,7 +33,15 @@ interface HistoryEntry {
 }
 
 const Index = () => {
-  const { words: allWords, setWords: setAllWords, loading, error, refetch } = useWords();
+  const [searchParams] = useSearchParams();
+  const userId = searchParams.get("user_id");
+  const urlPackageId = searchParams.get("package_id");
+  
+  const [selectedPackage, setSelectedPackage] = useState<string>(() => urlPackageId || "all");
+  const { words: unlockedWords, packages: unlockedPackages, loading, error, refetch } = useUnlockedWords(userId);
+  
+  // Convert unlocked words to Word type with stars
+  const [allWords, setAllWords] = useState<Word[]>([]);
   const [sessionWords, setSessionWords] = useState<Word[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showAllWords, setShowAllWords] = useState(false);
@@ -41,20 +50,27 @@ const Index = () => {
   const [currentWordAudio, setCurrentWordAudio] = useState<string>("");
   const [showWord, setShowWord] = useState(true);
   const [sessionInitialized, setSessionInitialized] = useState(false);
-  const [selectedPackage, setSelectedPackage] = useState<string | null>(null);
-  const [userId] = useState<string | null>(() => getUserIdFromUrl());
 
-  // Get unique packages from words
-  const packages = useMemo(() => {
-    const uniquePackages = [...new Set(allWords.map((w) => w.packageName))].filter((p): p is string => p !== null);
-    return uniquePackages.sort();
-  }, [allWords]);
+  // Convert unlocked words to Word format
+  useEffect(() => {
+    if (unlockedWords.length > 0) {
+      const words: Word[] = unlockedWords.map((w) => ({
+        id: w.id,
+        english: w.english,
+        turkish: w.turkish,
+        level: w.frequency_group,
+        stars: 0 as StarLevel,
+        packageId: w.package_id,
+        packageName: w.package_name,
+      }));
+      setAllWords(words);
+    }
+  }, [unlockedWords]);
 
-  // Filter words by selected package
+  // Filter words by selected package (already filtered by edge function, but keep for consistency)
   const filteredWords = useMemo(() => {
-    if (selectedPackage === null) return allWords;
-    return allWords.filter((w) => w.packageName === selectedPackage);
-  }, [allWords, selectedPackage]);
+    return allWords;
+  }, [allWords]);
 
   // Load saved session on mount
   useEffect(() => {
@@ -90,7 +106,7 @@ const Index = () => {
       // Clear old localStorage data and start fresh
       localStorage.removeItem("flashcard-progress");
       clearSessionState();
-      startNewSession(allWords, null);
+      startNewSession(allWords);
       setSessionInitialized(true);
     };
 
@@ -119,13 +135,12 @@ const Index = () => {
     }
   }, [sessionWords, currentIndex, sessionComplete, selectedPackage, sessionInitialized, userId]);
 
-  const startNewSession = (words: Word[], pkg: string | null) => {
-    const wordsToUse = pkg === null ? words : words.filter((w) => w.packageName === pkg);
-    if (wordsToUse.length === 0) {
+  const startNewSession = (words: Word[]) => {
+    if (words.length === 0) {
       toast.error("Bu pakette kelime yok");
       return;
     }
-    const session = createLearningSession(wordsToUse);
+    const session = createLearningSession(words);
     setSessionWords(session);
     setCurrentIndex(0);
     setSessionComplete(false);
@@ -133,9 +148,9 @@ const Index = () => {
     clearSessionState();
   };
 
-  const handlePackageChange = (pkg: string | null) => {
-    setSelectedPackage(pkg);
-    startNewSession(allWords, pkg);
+  const handlePackageChange = (packageId: string) => {
+    setSelectedPackage(packageId);
+    refetch(packageId === "all" ? undefined : packageId);
   };
 
   const speakWord = (word: string) => {
@@ -250,7 +265,7 @@ const Index = () => {
   };
 
   const handleRestart = () => {
-    startNewSession(allWords, selectedPackage);
+    startNewSession(allWords);
   };
 
   const calculateProgress = () => {
@@ -286,9 +301,9 @@ const Index = () => {
       <div className="p-4 pb-2">
         <div className="max-w-2xl mx-auto">
           <PackageSelector
-            packages={packages}
+            unlockedPackages={unlockedPackages}
             selectedPackage={selectedPackage}
-            onSelectPackage={handlePackageChange}
+            onSelect={handlePackageChange}
           />
         </div>
       </div>
@@ -366,7 +381,7 @@ const Index = () => {
         ) : error ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center">
             <p className="text-destructive mb-4">{error}</p>
-            <Button onClick={refetch}>Tekrar Dene</Button>
+            <Button onClick={() => refetch()}>Tekrar Dene</Button>
           </div>
         ) : sessionComplete ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center p-8 text-center">
