@@ -45,6 +45,13 @@ const Index = () => {
     if (!urlPackageId) return unlockedPackages;
     return unlockedPackages.filter(pkg => pkg.id === urlPackageId);
   }, [unlockedPackages, urlPackageId]);
+
+  // Get selected package name for modal title
+  const selectedPackageName = useMemo(() => {
+    if (selectedPackage === "all") return null;
+    const pkg = unlockedPackages.find(p => p.id === selectedPackage);
+    return pkg?.name || null;
+  }, [selectedPackage, unlockedPackages]);
   
   // Convert unlocked words to Word type with stars
   const [allWords, setAllWords] = useState<Word[]>([]);
@@ -460,6 +467,7 @@ const Index = () => {
         open={showAllWords}
         onOpenChange={setShowAllWords}
         selectedPackage={selectedPackage}
+        packageName={selectedPackageName || undefined}
       />
     </div>
   );

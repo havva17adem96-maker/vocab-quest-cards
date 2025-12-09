@@ -14,10 +14,17 @@ interface AllWordsModalProps {
   words: Word[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  selectedPackage?: string | null;
+  selectedPackage?: string;
+  packageName?: string;
 }
 
-export function AllWordsModal({ words, open, onOpenChange, selectedPackage }: AllWordsModalProps) {
+export function AllWordsModal({ 
+  words, 
+  open, 
+  onOpenChange, 
+  selectedPackage,
+  packageName 
+}: AllWordsModalProps) {
   const groupedWords = groupWordsByStars(words);
 
   const getGroupTitle = (stars: StarLevel): string => {
@@ -25,7 +32,10 @@ export function AllWordsModal({ words, open, onOpenChange, selectedPackage }: Al
     return `${stars} Yıldız`;
   };
 
-  const modalTitle = selectedPackage ? `${selectedPackage} (${words.length} kelime)` : `Tüm Kelimeler (${words.length})`;
+  // Build modal title based on selected package
+  const modalTitle = selectedPackage && selectedPackage !== "all" && packageName
+    ? `${packageName} (${words.length} kelime)`
+    : `Tüm Kelimeler (${words.length})`;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
